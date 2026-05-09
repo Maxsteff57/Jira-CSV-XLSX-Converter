@@ -20,9 +20,10 @@ env/
 .coverage
 htmlcov/
 
-# Пользовательские настройки
+# Пользовательские настройки и логи
 settings.json
 columns.txt
+app.log
 
 # IDE
 .idea/
@@ -33,6 +34,6 @@ columns.txt
 Thumbs.db
 desktop.ini
 
-# Артефакты
+# Артефакты конвертации
 *.xlsx
 *.csv
