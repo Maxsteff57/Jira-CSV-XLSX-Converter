@@ -651,3 +651,212 @@ class TestRoundTrip:
         assert "TASK-1" in df.iloc[:, 0].values
         assert "TASK-2" in df.iloc[:, 0].values
         assert len(df) == 2
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# read_csv_smart — автоопределение кодировки
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestReadCsvSmart:
+
+    def test_utf8_with_bom(self, tmp):
+        """utf-8-sig (BOM) — основная кодировка Jira."""
+        p = tmp / "u8sig.csv"
+        p.write_bytes("\ufeffКлюч;Тема\nT-1;Задача\n".encode("utf-8"))
+        df = core.read_csv_smart(str(p))
+        assert df.iloc[0, 0] == "T-1"
+        assert "Ключ" in df.columns
+
+    def test_utf8_without_bom(self, tmp):
+        p = tmp / "u8.csv"
+        p.write_bytes("Ключ;Тема\nT-1;Задача\n".encode("utf-8"))
+        df = core.read_csv_smart(str(p))
+        assert df.iloc[0, 0] == "T-1"
+
+    def test_cp1251_fallback(self, tmp):
+        """CP1251 — старый экспорт Jira или ручная правка в Excel."""
+        p = tmp / "cp1251.csv"
+        p.write_bytes("Ключ;Тема\nT-1;Задача\n".encode("cp1251"))
+        df = core.read_csv_smart(str(p))
+        assert df.iloc[0, 0] == "T-1"
+        assert df.iloc[0, 1] == "Задача"   # русский текст должен сохраниться
+
+    def test_invalid_bytes_eventually_fall_through(self, tmp):
+        """
+        Если ни одна кодировка не подошла — должно подняться исключение.
+        latin-1 в самом конце CSV_ENCODINGS принимает любые байты,
+        поэтому реально упасть тяжело — но fallback должен работать.
+        """
+        p = tmp / "any.csv"
+        p.write_bytes(b"Key;Subject\nT-1;Task\n")
+        df = core.read_csv_smart(str(p))
+        # latin-1 всегда читает — данные могут быть искажены, но мы не падаем
+        assert len(df) == 1
+
+    def test_passes_kwargs_to_pandas(self, tmp):
+        """Должен пробрасывать kwargs (nrows, sep и т.д.)."""
+        p = tmp / "h.csv"
+        p.write_text("A;B\n1;2\n3;4\n", encoding="utf-8-sig")
+        df = core.read_csv_smart(str(p), nrows=0)
+        assert len(df) == 0
+        assert list(df.columns) == ["A", "B"]
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# convert — edge cases (битые/специальные данные)
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestConvertEdgeCases:
+
+    def test_csv_with_quoted_values(self, tmp):
+        """Значения с разделителем внутри кавычек должны парситься корректно."""
+        p = tmp / "quoted.csv"
+        p.write_text(
+            'Ключ;Описание\n'
+            'T-1;"Текст с ; точкой с запятой"\n',
+            encoding="utf-8-sig",
+        )
+        out = str(tmp / "out.xlsx")
+        rows, cols = core.convert([str(p)], out)
+        assert rows == 1
+        assert cols == 2
+
+    def test_csv_with_newline_in_cell(self, tmp):
+        """Перенос строки внутри ячейки (заключённой в кавычки)."""
+        p = tmp / "nl.csv"
+        p.write_text(
+            'Ключ;Описание\n'
+            'T-1;"Первая строка\nВторая строка"\n',
+            encoding="utf-8-sig",
+        )
+        out = str(tmp / "out.xlsx")
+        rows, cols = core.convert([str(p)], out)
+        assert rows == 1
+
+    def test_csv_with_empty_cells(self, tmp):
+        p = tmp / "empty.csv"
+        p.write_text("Ключ;Тема;Статус\nT-1;;Открыта\nT-2;Тема2;\n",
+                     encoding="utf-8-sig")
+        out = str(tmp / "out.xlsx")
+        rows, cols = core.convert([str(p)], out)
+        assert rows == 2
+        assert cols == 3
+
+    def test_convert_with_cp1251_input(self, tmp):
+        """Полный пайплайн с CP1251-входом."""
+        p = tmp / "cp.csv"
+        p.write_bytes("Ключ;Тема\nT-1;Задача\n".encode("cp1251"))
+        out = str(tmp / "out.xlsx")
+        rows, cols = core.convert([str(p)], out)
+        assert rows == 1
+        wb = load_workbook(out)
+        ws = wb.active
+        # Кириллица должна сохраниться (xlsx всегда utf-8 внутри)
+        assert ws.cell(2, 2).value == "Задача"
+
+    def test_nonexistent_csv_raises(self, tmp):
+        """Несуществующий файл должен бросать исключение, а не молча возвращать."""
+        with pytest.raises(Exception):
+            core.convert(["/nonexistent/file.csv"], str(tmp / "out.xlsx"))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Логирование
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestLogging:
+
+    def test_logger_exists(self):
+        import logging
+        assert isinstance(core.log, logging.Logger)
+        assert core.log.name == "jira_converter"
+
+    def test_load_settings_handles_corrupt_json(self, tmp_path, monkeypatch):
+        """Битый JSON не должен падать — просто warning в лог."""
+        bad = tmp_path / "settings.json"
+        bad.write_text("{ this is not valid json", encoding="utf-8")
+        monkeypatch.setattr(core, "settings_path", lambda: bad)
+        result = core.load_settings()
+        assert result == {}   # вернулся пустой dict, без исключения
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# _deduplicate_columns + защита от Table corruption
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestDeduplicateColumns:
+
+    def test_basic_dedup(self):
+        df = pd.DataFrame([[1, 2, 3]], columns=["A", "B", "A"])
+        result = core._deduplicate_columns(df)
+        assert list(result.columns) == ["A", "B", "A.1"]
+
+    def test_triple_dup(self):
+        df = pd.DataFrame([[1, 2, 3]], columns=["X", "X", "X"])
+        result = core._deduplicate_columns(df)
+        assert list(result.columns) == ["X", "X.1", "X.2"]
+
+    def test_empty_name_replaced(self):
+        df = pd.DataFrame([[1, 2]], columns=["", "  "])
+        result = core._deduplicate_columns(df)
+        assert "Колонка 1" in result.columns
+        assert "Колонка 2" in result.columns
+
+    def test_long_name_trimmed(self):
+        long_name = "x" * 300
+        df = pd.DataFrame([[1]], columns=[long_name])
+        result = core._deduplicate_columns(df)
+        assert all(len(c) <= 200 for c in result.columns)
+
+    def test_no_change_when_unique(self):
+        df = pd.DataFrame([[1, 2, 3]], columns=["A", "B", "C"])
+        result = core._deduplicate_columns(df)
+        assert list(result.columns) == ["A", "B", "C"]
+
+
+class TestMergeWithDuplicateColumns:
+    """
+    Регрессионный тест на реальный баг: при склейке двух CSV с разными
+    схемами получались дубли заголовков, и Excel выдавал recovery error
+    на /xl/tables/table1.xml.
+    """
+
+    def test_merge_two_csvs_different_schemas(self, tmp):
+        csv1 = tmp / "a.csv"
+        csv2 = tmp / "b.csv"
+        # Оба CSV содержат "Тема", но разное число колонок
+        csv1.write_text("Ключ;Тема\nT-1;Первая\n", encoding="utf-8-sig")
+        csv2.write_text("Ключ;Тема;Статус;Дата\nT-2;Вторая;Открыт;01/янв/26\n",
+                        encoding="utf-8-sig")
+        out = str(tmp / "merged.xlsx")
+        rows, cols = core.convert([str(csv1), str(csv2)], out,
+                                  table_style="TableStyleMedium2")
+        assert rows == 2
+
+        # Проверяем что в xlsx все имена колонок Table уникальны
+        import zipfile, re
+        from xml.etree import ElementTree as ET
+        with zipfile.ZipFile(out) as z:
+            table_xml = z.read("xl/tables/table1.xml").decode("utf-8")
+
+        # XML должен быть валидным
+        ET.fromstring(table_xml)
+
+        # Имена колонок должны быть уникальны (Excel требует)
+        names = re.findall(r'<tableColumn[^>]*\bname="([^"]+)"', table_xml)
+        assert len(names) == len(set(names)), \
+            f"Найдены дубли в Table: {[n for n in names if names.count(n) > 1]}"
+
+    def test_csv_with_duplicate_headers_in_source(self, tmp):
+        """Если сам CSV содержит дублирующиеся колонки — тоже не должно падать."""
+        p = tmp / "d.csv"
+        # Pandas сам добавит .1 к дублям при чтении, но проверим что
+        # после auto_rename и concat не возникнет проблем
+        p.write_text("Ключ;Статус;Статус\nT-1;Open;Closed\n", encoding="utf-8-sig")
+        out = str(tmp / "out.xlsx")
+        rows, cols = core.convert([str(p)], out, table_style="TableStyleMedium2")
+        assert rows == 1
+        # Файл должен открыться без ошибок
+        from openpyxl import load_workbook
+        wb = load_workbook(out)
+        assert len(wb.active.tables) > 0

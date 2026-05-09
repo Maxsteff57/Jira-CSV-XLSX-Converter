@@ -12,7 +12,7 @@
 
 Автор: maxsteff  ·  https://t.me/maxsteff
 """
-import sys, re, os, json, threading, winreg
+import sys, re, os, json, threading, winreg, logging
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
@@ -30,12 +30,73 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, NamedSty
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
+
+# ─── Логирование ──────────────────────────────────────────────────────────────
+# Лог пишется в app.log рядом с .exe — помогает разбираться с проблемами
+# без необходимости запускать программу из консоли.
+def _setup_logging():
+    """Настраивает лог-файл рядом с .exe / app.py. Молча падает, если нельзя писать."""
+    try:
+        if getattr(sys, "frozen", False):
+            log_dir = Path(sys.executable).resolve().parent
+        else:
+            log_dir = Path(__file__).resolve().parent
+        log_file = log_dir / "app.log"
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s  %(levelname)-7s  %(message)s",
+            handlers=[
+                logging.FileHandler(log_file, encoding="utf-8"),
+                logging.StreamHandler(sys.stderr),
+            ],
+        )
+    except Exception:
+        # Если не получилось — логируем только в stderr
+        logging.basicConfig(level=logging.INFO,
+                            format="%(asctime)s  %(levelname)-7s  %(message)s")
+
+_setup_logging()
+log = logging.getLogger("jira_converter")
+
+
+# ─── Чтение CSV с автоопределением кодировки ─────────────────────────────────
+
+# Кодировки пробуются в этом порядке — первой ставим utf-8-sig потому что
+# Jira с настройками по умолчанию выгружает именно её. CP1251 встречается
+# у пользователей со старыми экспортами или ручными правками в Excel.
+CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1251", "windows-1251", "latin-1")
+
+
+def read_csv_smart(path: str, sep: str = ";", **kwargs) -> pd.DataFrame:
+    """
+    Читает CSV с автоматическим перебором кодировок.
+    Для каждой кодировки ловит UnicodeDecodeError и пробует следующую.
+    Если ни одна не подошла — пробрасывает последнее исключение.
+
+    Логирует выбранную кодировку (на уровне INFO для не-utf8, DEBUG иначе).
+    """
+    last_error = None
+    for enc in CSV_ENCODINGS:
+        try:
+            df = pd.read_csv(path, sep=sep, encoding=enc, dtype=str, **kwargs)
+            if enc != "utf-8-sig":
+                log.info("CSV %s прочитан в %s", Path(path).name, enc)
+            return df
+        except (UnicodeDecodeError, UnicodeError) as e:
+            last_error = e
+            continue
+    log.error("Не удалось определить кодировку %s. Последняя ошибка: %s",
+              path, last_error)
+    raise last_error or UnicodeDecodeError("unknown", b"", 0, 1,
+                                            f"Cannot decode {path}")
+
+
 # ─── Константы ────────────────────────────────────────────────────────────────
 
 FONT          = "Segoe UI"
 MIN_W         = 600                              # минимальная ширина окна
-APP_NAME      = "Конвертер Jira CSV ↔ XLSX"
-VERSION       = "0.1 beta"
+APP_NAME      = "Jira CSV ↔ XLSX"
+VERSION       = "0.2 beta"
 SETTINGS_FILE = "settings.json"                  # хранится рядом с .exe
 
 # Универсальная карта сокращений месяцев (8 языков) → номер месяца.
@@ -1088,23 +1149,32 @@ def settings_path() -> Path:
 
 
 def load_settings() -> dict:
-    """Читает settings.json. Молча возвращает {} при любых проблемах."""
+    """
+    Читает settings.json. При повреждении файла или ошибке доступа возвращает {}
+    и пишет warning в лог — пользователь получит дефолтные настройки.
+    """
     p = settings_path()
-    if p.exists():
-        try:
-            return json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        log.warning("Повреждён settings.json (%s) — используются дефолты", e)
+    except OSError as e:
+        log.warning("Не удалось прочитать settings.json: %s", e)
     return {}
 
 
 def save_settings(data: dict):
-    """Пишет settings.json. Ошибки молча проглатываются — не критично."""
+    """
+    Пишет settings.json. При ошибке записи (например read-only папка)
+    логирует и продолжает работу — настройки просто не сохранятся между запусками.
+    """
     try:
         settings_path().write_text(json.dumps(data, ensure_ascii=False, indent=2),
                                    encoding="utf-8")
-    except Exception:
-        pass
+    except OSError as e:
+        log.warning("Не удалось сохранить settings.json: %s", e)
 
 
 def find_columns_txt() -> str:
@@ -1252,7 +1322,7 @@ def generate_columns_example(csv_path: str, save_dir: Path,
     if delimiter.lower() == "tab": delimiter = "\t"
     try:
         # Читаем только заголовки — данные не нужны, экономим память
-        df = pd.read_csv(csv_path, sep=delimiter, encoding="utf-8-sig", dtype=str, nrows=0)
+        df = read_csv_smart(csv_path, sep=delimiter, nrows=0)
         renamed = [auto_rename(c, strip_prefixes) for c in df.columns]
         lines = [
             "# ──────────────────────────────────────────────────────────────────────",
@@ -1281,6 +1351,38 @@ def generate_columns_example(csv_path: str, save_dir: Path,
         return str(out)
     except Exception:
         return ""
+
+
+def _deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Делает имена колонок уникальными: дубли получают суффикс .1, .2, …
+    Также защищает от пустых имён (заменяет на 'Колонка 1', 'Колонка 2', …)
+    и обрезает чрезмерно длинные имена (>200 символов — Excel ограничение 255).
+
+    Возвращает новый DataFrame с переименованными колонками.
+    Без этого Excel Table при открытии xlsx ругается:
+      "Восстановленные записи: Таблица из части /xl/tables/table1.xml"
+    """
+    seen = {}
+    new_cols = []
+    for i, col in enumerate(df.columns):
+        # Пустое имя → 'Колонка N'
+        name = str(col).strip() if col else ""
+        if not name:
+            name = f"Колонка {i + 1}"
+        # Слишком длинное → обрезаем
+        if len(name) > 200:
+            name = name[:200]
+        # Уникализация — сохраняем счётчик для каждого базового имени
+        if name not in seen:
+            seen[name] = 0
+            new_cols.append(name)
+        else:
+            seen[name] += 1
+            new_cols.append(f"{name}.{seen[name]}")
+    df = df.copy()
+    df.columns = new_cols
+    return df
 
 
 # ─── Главная функция конвертации ─────────────────────────────────────────────
@@ -1312,18 +1414,21 @@ def convert(csv_paths: list, xlsx_path: str,
     # Читаем все переданные CSV-файлы и склеиваем в один DataFrame
     dfs = []
     for p in csv_paths:
-        dfs.append(pd.read_csv(p, sep=delimiter, encoding="utf-8-sig", dtype=str))
+        dfs.append(read_csv_smart(p, sep=delimiter))
         
     if not dfs:
         return 0, 0
         
     df = pd.concat(dfs, ignore_index=True)
     df = df.drop_duplicates(ignore_index=True)
-    
-    # Удаляем дубликаты задач (на случай, если пользователь загрузил одни и те же файлы)
-    df = df.drop_duplicates(ignore_index=True)
 
     df = df.rename(columns={c: auto_rename(c, strip_prefixes) for c in df.columns})
+
+    # Гарантируем уникальность имён колонок — Excel Table падает с recovery error
+    # при дубликатах в заголовке. Pandas сам добавляет .1, .2 ТОЛЬКО при чтении CSV,
+    # но после ручного rename() дубли могут вернуться (особенно при склейке нескольких
+    # CSV с разной схемой). Пройдёмся явно.
+    df = _deduplicate_columns(df)
 
     # Фильтр колонок: сохраняем только запрошенные, в указанном порядке
     if keep:
@@ -2799,45 +2904,69 @@ class App(TkinterDnD.Tk if _DND else tk.Tk):
         if not hasattr(self, '_csv_paths') or not self._csv_paths:
             messagebox.showwarning(self.s("err_ttl"), self.s("no_file"))
             return
-            
+
         for p in self._csv_paths:
             if not os.path.isfile(p):
-                messagebox.showerror(self.s("err_ttl"), f"{self.s('file_not_found')}\n{p}")
+                messagebox.showerror(self.s("err_ttl"),
+                                     f"{self.s('file_not_found')}\n{p}")
+                log.warning("Файл не найден: %s", p)
                 return
-                
+
         # Проверяем путь сохранения
         if not xlsx_path:
             messagebox.showwarning(self.s("err_ttl"), self.s("no_path"))
             return
 
+        # Проверяем что выходная папка существует и доступна для записи —
+        # лучше упасть здесь чем после нескольких секунд конвертации
+        out_dir = Path(xlsx_path).parent
+        if not out_dir.exists():
+            messagebox.showerror(self.s("err_ttl"),
+                                 f"{self.s('file_not_found')}\n{out_dir}")
+            log.warning("Выходная папка не существует: %s", out_dir)
+            return
+        if not os.access(out_dir, os.W_OK):
+            messagebox.showerror(self.s("err_ttl"),
+                                 f"{self.s('err_status').format(error='no write access to ' + str(out_dir))}")
+            log.warning("Нет прав на запись в %s", out_dir)
+            return
+
         col_path   = self.col_var.get().strip()
         style_name = TABLE_STYLE_BY_KEY.get(self._table_style_key)
-        row_h      = self.rh_var.get().strip() # Забираем высоту строк
-        dlm        = self.dlm_var.get().strip() # Забираем разделитель
-        
+        row_h      = self.rh_var.get().strip()
+        dlm        = self.dlm_var.get().strip()
+
         is_to_csv = getattr(self, '_mode', 'to_xlsx') == 'to_csv'
 
         # Вложенная функция, которая запускается ТОЛЬКО после подтверждения разделителя
         def start_conversion(final_dlm):
+            log.info("Старт конвертации: %d файл(ов) → %s, mode=%s",
+                     len(self._csv_paths), xlsx_path,
+                     "xlsx→csv" if is_to_csv else "csv→xlsx")
+
             # UI в режим "работаем"
             self.btn.config(state="disabled")
             self._set_status(self.s("status_working"), self._t()["ACC2"])
             self._start_pb()
-            
+
             # Конвертация в фоне — даже на больших файлах UI остаётся отзывчивым.
             # Результат приходит через self.after(0, ...) — это безопасный
             # способ выполнить код в главном (UI) потоке из фонового.
             def worker():
                 try:
                     if is_to_csv:
-                        # Обратная конвертация XLSX -> CSV
-                        rows, cols = convert_xlsx_to_csv(self._csv_paths, xlsx_path, delimiter=final_dlm)
+                        rows, cols = convert_xlsx_to_csv(
+                            self._csv_paths, xlsx_path, delimiter=final_dlm)
                     else:
-                        # Стандартная конвертация CSV -> XLSX
-                        rows, cols = convert(self._csv_paths, xlsx_path, col_path, style_name, row_height=row_h, delimiter=final_dlm)
-                        
+                        rows, cols = convert(
+                            self._csv_paths, xlsx_path, col_path, style_name,
+                            row_height=row_h, delimiter=final_dlm)
+
+                    log.info("Готово: %d строк, %d колонок → %s",
+                             rows, cols, Path(xlsx_path).name)
                     self.after(0, lambda: self._done(True, rows, cols, xlsx_path))
                 except Exception as e:
+                    log.exception("Ошибка конвертации: %s", e)
                     self.after(0, lambda: self._done(False, error=str(e)))
 
             threading.Thread(target=worker, daemon=True).start()
@@ -2847,7 +2976,7 @@ class App(TkinterDnD.Tk if _DND else tk.Tk):
             self._show_delimiter_dialog(start_conversion)
         else:
             start_conversion(dlm)
-            
+
     def _show_delimiter_dialog(self, on_confirm):
         """Модальное окно выбора разделителя перед сохранением в CSV."""
         t = self._t()
