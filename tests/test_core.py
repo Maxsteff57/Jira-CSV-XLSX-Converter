@@ -418,6 +418,116 @@ class TestConvert:
         assert rows == 1
         assert cols == 2
 
+    # ── Перенос текста в заголовках ──────────────────────────────────────────
+    def test_header_wrap_with_style(self, simple_csv, tmp):
+        """При выбранном стиле таблицы заголовки тоже должны переноситься."""
+        out = str(tmp / "out.xlsx")
+        core.convert([str(simple_csv)], out, table_style="TableStyleMedium2",
+                     header_wrap=True)
+        wb = load_workbook(out)
+        ws = wb.active
+        for ci in range(1, ws.max_column + 1):
+            assert ws.cell(1, ci).alignment.wrap_text is True
+
+    def test_header_wrap_disabled(self, simple_csv, tmp):
+        """Если header_wrap=False — переноса в заголовках быть не должно."""
+        out = str(tmp / "out.xlsx")
+        core.convert([str(simple_csv)], out, header_wrap=False)
+        wb = load_workbook(out)
+        ws = wb.active
+        for ci in range(1, ws.max_column + 1):
+            # openpyxl хранит отключённый перенос как None/False — оба «ложны»
+            assert not ws.cell(1, ci).alignment.wrap_text
+
+    # ── Автоподбор ширины по строке / диапазону ──────────────────────────────
+    def test_width_mode_row(self, tmp):
+        """Ширина подбирается под одну выбранную строку, а не под максимум."""
+        p = tmp / "w.csv"
+        p.write_text(
+            "Ключ;Описание\n"
+            "T-1;коротко\n"
+            "T-2;очень очень длинное описание в этой ячейке\n",
+            encoding="utf-8-sig")
+        # row=2 → первая строка данных («коротко»)
+        core.convert([str(p)], str(tmp / "short.xlsx"),
+                     width_mode="row", width_row=2)
+        # row=3 → вторая строка данных (длинный текст)
+        core.convert([str(p)], str(tmp / "long.xlsx"),
+                     width_mode="row", width_row=3)
+        w_short = load_workbook(str(tmp / "short.xlsx")).active \
+            .column_dimensions["B"].width
+        w_long = load_workbook(str(tmp / "long.xlsx")).active \
+            .column_dimensions["B"].width
+        assert w_long > w_short
+
+    def test_width_mode_range_narrower_than_all(self, tmp):
+        """Диапазон без самой длинной строки даёт более узкие колонки."""
+        p = tmp / "w.csv"
+        p.write_text(
+            "К;В\n"
+            "1;a\n"
+            "2;bbbbbbbbbbbbbbbbbbbb\n"
+            "3;ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n",
+            encoding="utf-8-sig")
+        # диапазон xlsx-строк 2-3 (без строки 4 с самым длинным значением)
+        core.convert([str(p)], str(tmp / "range.xlsx"),
+                     width_mode="range", width_from=2, width_to=3)
+        core.convert([str(p)], str(tmp / "all.xlsx"))
+        w_range = load_workbook(str(tmp / "range.xlsx")).active \
+            .column_dimensions["B"].width
+        w_all = load_workbook(str(tmp / "all.xlsx")).active \
+            .column_dimensions["B"].width
+        assert w_all > w_range
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# compute_column_widths  (режимы автоподбора ширины)
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestColumnWidths:
+
+    def _df(self):
+        return pd.DataFrame({
+            "A": ["x", "a" * 20, "yy"],          # max данных = 20
+            "B": ["1", "2", "z" * 30],           # max данных = 30
+        })
+
+    def test_all_uses_global_max(self):
+        w = core.compute_column_widths(self._df(), "all")
+        assert w[1] > w[0]   # колонка B (30) шире колонки A (20)
+
+    def test_row_uses_single_row(self):
+        # xlsx-строка 2 = первая строка данных: A="x"(1), B="1"(1) → оба min 12
+        w = core.compute_column_widths(self._df(), "row", row=2)
+        assert w[0] == 12
+        assert w[1] == 12
+
+    def test_range_excludes_outside_rows(self):
+        # диапазон xlsx-строк 2-3: A→max(1,20)=20, B→max(1,1)=1
+        w = core.compute_column_widths(self._df(), "range", rng_from=2, rng_to=3)
+        assert w[0] > w[1]
+
+    def test_values_within_clamp(self):
+        w = core.compute_column_widths(self._df(), "all")
+        assert all(12 <= x <= 255 for x in w)
+
+    def test_all_no_ceiling_for_long_text(self):
+        # "all" не обрезает длинный текст (как автоподбор Excel)
+        df = pd.DataFrame({"X": ["a" * 200]})
+        w = core.compute_column_widths(df, "all")
+        assert w[0] > 60   # без потолка 60
+
+    def test_row_range_have_ceiling(self):
+        # "row"/"range" ограничены потолком 60
+        df = pd.DataFrame({"X": ["a" * 200, "b", "c"]})
+        assert core.compute_column_widths(df, "row", row=2)[0] <= 60
+        assert core.compute_column_widths(df, "range", rng_from=2, rng_to=3)[0] <= 60
+
+    def test_header_row_takes_header_length(self):
+        # row=1 → берётся длина заголовка
+        w = core.compute_column_widths(self._df(), "row", row=1)
+        assert len(w) == 2
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # convert_xlsx_to_csv  (XLSX → CSV)
@@ -590,6 +700,9 @@ class TestStrings:
         "done_msg", "err_status", "about_desc", "about_tg",
         "dz_idle", "hint_none",
         "s_none", "s_l_blue", "s_m_green", "s_d_blue",
+        "width_only_lbl", "width_mode_all", "width_mode_row",
+        "width_mode_range", "header_wrap_lbl",
+        "width_hint_row", "width_hint_range",
     ]
     LANGUAGES = ["ru", "en", "de", "fr", "es", "zh", "ar", "pt"]
 

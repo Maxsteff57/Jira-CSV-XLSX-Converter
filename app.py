@@ -99,6 +99,22 @@ APP_NAME      = "Jira CSV ↔ XLSX"
 VERSION       = "0.2 beta"
 SETTINGS_FILE = "settings.json"                  # хранится рядом с .exe
 
+# ─── Режимы автоподбора ширины столбцов ───────────────────────────────────────
+#   "all"   — по самому длинному значению среди всех строк (поведение по умолчанию)
+#   "row"   — ширина подбирается под содержимое одной строки (номер = row)
+#   "range" — ширина подбирается по максимуму внутри диапазона строк [from..to]
+# row/from/to — номера строк ИТОГОВОГО xlsx (1 = заголовок, 2.. = данные).
+WIDTH_MODE_STRINGS = {
+    "all":   "width_mode_all",
+    "row":   "width_mode_row",
+    "range": "width_mode_range",
+}
+WIDTH_MODE_ITEMS = [            # (key, string_key) в порядке отображения в попапе
+    ("all",   "width_mode_all"),
+    ("row",   "width_mode_row"),
+    ("range", "width_mode_range"),
+]
+
 # Универсальная карта сокращений месяцев (8 языков) → номер месяца.
 # Ключи приведены к нижнему регистру, берем первые 3 символа.
 MONTH_MAP = {
@@ -344,6 +360,14 @@ STRINGS = {
         "dlm_comma":      "Запятая ( , )",
         "dlm_pipe":       "Вертикальная черта ( | )",
         "dlm_tab":        "Знак табуляции ( Tab )",
+        "width_only_lbl":   "Ширина столбцов:",
+        "width_mode_all":   "По всем строкам",
+        "width_mode_row":   "По строке №",
+        "width_mode_range": "По диапазону",
+        "width_param_lbl":  "Строка / диапазон:",
+        "header_wrap_lbl":  "Перенос в заголовках",
+        "width_hint_row":   "1 = заголовок, 2+ = данные",
+        "width_hint_range": "напр. 2-10",
     },
     "en": {
         "title":          "Jira CSV ↔ XLSX Converter",
@@ -448,6 +472,14 @@ STRINGS = {
         "dlm_comma":      "Comma ( , )",
         "dlm_pipe":       "Pipe ( | )",
         "dlm_tab":        "Tab",
+        "width_only_lbl":   "Column width:",
+        "width_mode_all":   "All rows",
+        "width_mode_row":   "By row №",
+        "width_mode_range": "By range",
+        "width_param_lbl":  "Row / range:",
+        "header_wrap_lbl":  "Wrap headers",
+        "width_hint_row":   "1 = header, 2+ = data",
+        "width_hint_range": "e.g. 2-10",
     },
     "de": {
         "title":          "Jira CSV ↔ XLSX Konverter",
@@ -552,6 +584,14 @@ STRINGS = {
         "dlm_comma":      "Komma ( , )",
         "dlm_pipe":       "Senkrechter Strich ( | )",
         "dlm_tab":        "Tabulator ( Tab )",
+        "width_only_lbl":   "Spaltenbreite:",
+        "width_mode_all":   "Alle Zeilen",
+        "width_mode_row":   "Nach Zeile №",
+        "width_mode_range": "Nach Bereich",
+        "width_param_lbl":  "Zeile / Bereich:",
+        "header_wrap_lbl":  "Zeilenumbruch in Kopfzeilen",
+        "width_hint_row":   "1 = Kopfzeile, 2+ = Daten",
+        "width_hint_range": "z. B. 2-10",
     },
     "fr": {
         "title":          "Convertisseur Jira CSV ↔ XLSX",
@@ -656,6 +696,14 @@ STRINGS = {
         "dlm_comma":      "Virgule ( , )",
         "dlm_pipe":       "Barre verticale ( | )",
         "dlm_tab":        "Tabulation ( Tab )",
+        "width_only_lbl":   "Largeur des colonnes :",
+        "width_mode_all":   "Toutes les lignes",
+        "width_mode_row":   "Par ligne №",
+        "width_mode_range": "Par plage",
+        "width_param_lbl":  "Ligne / plage :",
+        "header_wrap_lbl":  "Renvoi à la ligne (en-têtes)",
+        "width_hint_row":   "1 = en-tête, 2+ = données",
+        "width_hint_range": "ex. 2-10",
     },
     "es": {
         "title":          "Convertidor Jira CSV ↔ XLSX",
@@ -760,6 +808,14 @@ STRINGS = {
         "dlm_comma":      "Coma ( , )",
         "dlm_pipe":       "Barra vertical ( | )",
         "dlm_tab":        "Tabulador ( Tab )",
+        "width_only_lbl":   "Ancho de columna:",
+        "width_mode_all":   "Todas las filas",
+        "width_mode_row":   "Por fila №",
+        "width_mode_range": "Por rango",
+        "width_param_lbl":  "Fila / rango:",
+        "header_wrap_lbl":  "Ajustar texto (encabezados)",
+        "width_hint_row":   "1 = encabezado, 2+ = datos",
+        "width_hint_range": "ej. 2-10",
     },
     "zh": {
         "title":          "Jira CSV ↔ XLSX 转换器",
@@ -864,6 +920,14 @@ STRINGS = {
         "dlm_comma":      "逗号 ( , )",
         "dlm_pipe":       "竖线 ( | )",
         "dlm_tab":        "制表符 ( Tab )",
+        "width_only_lbl":   "列宽：",
+        "width_mode_all":   "所有行",
+        "width_mode_row":   "按行号 №",
+        "width_mode_range": "按范围",
+        "width_param_lbl":  "行 / 范围：",
+        "header_wrap_lbl":  "标题换行",
+        "width_hint_row":   "1 = 标题，2+ = 数据",
+        "width_hint_range": "例如 2-10",
     },
     "ar": {
         "title":          "محوّل Jira CSV ↔ XLSX",
@@ -968,6 +1032,14 @@ STRINGS = {
         "dlm_comma":      "فاصلة ( , )",
         "dlm_pipe":       "خط عمودي ( | )",
         "dlm_tab":        "علامة جدولة ( Tab )",
+        "width_only_lbl":   "عرض الأعمدة:",
+        "width_mode_all":   "كل الصفوف",
+        "width_mode_row":   "حسب الصف №",
+        "width_mode_range": "حسب النطاق",
+        "width_param_lbl":  "صف / نطاق:",
+        "header_wrap_lbl":  "التفاف النص في الترويسات",
+        "width_hint_row":   "1 = ترويسة، 2+ = بيانات",
+        "width_hint_range": "مثال 2-10",
     },
     "pt": {
         "title":          "Conversor Jira CSV ↔ XLSX",
@@ -1072,6 +1144,14 @@ STRINGS = {
         "dlm_comma":      "Vírgula ( , )",
         "dlm_pipe":       "Barra vertical ( | )",
         "dlm_tab":        "Tabulação ( Tab )",
+        "width_only_lbl":   "Largura da coluna:",
+        "width_mode_all":   "Todas as linhas",
+        "width_mode_row":   "Por linha №",
+        "width_mode_range": "Por intervalo",
+        "width_param_lbl":  "Linha / intervalo:",
+        "header_wrap_lbl":  "Quebrar texto (cabeçalhos)",
+        "width_hint_row":   "1 = cabeçalho, 2+ = dados",
+        "width_hint_range": "ex. 2-10",
     },
 }
 
@@ -1385,13 +1465,74 @@ def _deduplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# ─── Расчёт ширины столбцов ───────────────────────────────────────────────────
+
+def _row_cell_len(df, xlsx_row: int, ci: int, header_len: int) -> int:
+    """
+    Длина текста в одной ячейке.
+    xlsx_row — номер строки итогового документа (1 = заголовок, 2.. = данные).
+    ci       — индекс колонки в DataFrame (0-based).
+    """
+    if xlsx_row <= 1:
+        return header_len
+    di = xlsx_row - 2
+    if 0 <= di < len(df):
+        return len(str(df.iloc[di, ci]))
+    return header_len
+
+
+def compute_column_widths(df, mode: str = "all",
+                          row: int = 0, rng_from: int = 0,
+                          rng_to: int = 0) -> list:
+    """
+    Возвращает список ширин колонок (в «символах» Excel) с учётом режима.
+
+    mode:
+      "all"   — максимум по всем строкам + заголовку (как было изначально);
+      "row"   — только содержимое одной строки `row`;
+      "range" — максимум внутри диапазона [rng_from .. rng_to].
+
+    row/from/to — номера строк итогового xlsx (1 = заголовок).
+    Потолок ширины зависит от режима:
+      "all"   — без ограничений, как нативный автоподбор Excel (до 255);
+      "row"/"range" — ограничение 60 (режимы целенаправленно сужают таблицу).
+    """
+    n_rows = len(df)
+    # "all" → полный автоподбор; "row"/"range" → ограниченные режимы
+    max_w = 255 if mode == "all" else 60
+    widths = []
+    for ci in range(len(df.columns)):
+        header_len = len(str(df.columns[ci]))
+        if mode == "row":
+            mx = _row_cell_len(df, row if row and row >= 1 else 2, ci, header_len)
+        elif mode == "range":
+            start = rng_from if rng_from and rng_from >= 1 else 1
+            end = rng_to if rng_to and rng_to >= 1 else (n_rows + 1)
+            start = max(1, min(start, n_rows + 1))
+            end = max(start, min(end, n_rows + 1))
+            mx = 0
+            for r in range(start, end + 1):
+                mx = max(mx, _row_cell_len(df, r, ci, header_len))
+        else:  # "all" — поведение по умолчанию
+            data_mx = df.iloc[:, ci].astype(str).str.len().max() if n_rows else 0
+            mx = max(header_len, int(data_mx))
+        # +0.2: небольшой отступ поверх полной длины значения
+        widths.append(min(max(mx + 0.2, 12), max_w))
+    return widths
+
+
 # ─── Главная функция конвертации ─────────────────────────────────────────────
 
 def convert(csv_paths: list, xlsx_path: str,
             columns_path: str = "",
             table_style: str | None = None,
             row_height: str = "Авто",
-            delimiter: str = ";") -> tuple:
+            delimiter: str = ";",
+            header_wrap: bool = True,
+            width_mode: str = "all",
+            width_row: int = 0,
+            width_from: int = 0,
+            width_to: int = 0) -> tuple:
     """
     CSV → XLSX. Возвращает (количество_строк, количество_колонок).
 
@@ -1400,6 +1541,11 @@ def convert(csv_paths: list, xlsx_path: str,
         xlsx_path    — куда сохранить
         columns_path — путь к columns.txt (или '' для автопоиска)
         table_style  — имя встроенного стиля Excel или None
+        header_wrap  — включить перенос текста в заголовках
+        width_mode   — режим автоподбора ширины: "all" | "row" | "range"
+        width_row    — номер строки (итогового xlsx) для режима "row"
+        width_from   — начало диапазона строк для режима "range"
+        width_to     — конец диапазона строк для режима "range"
 
     Этапы:
       1. Читаем CSV, переименовываем колонки через auto_rename()
@@ -1453,30 +1599,40 @@ def convert(csv_paths: list, xlsx_path: str,
     ca   = Alignment(vertical="top", wrap_text=True)
     thin = Side(style="thin", color="BDC3C7")
     brd  = Border(left=thin, right=thin, top=thin, bottom=thin)
-    for ri in range(2, len(df) + 2):
-        # --- Установка высоты строки ---
-        if str(row_height).strip().lower() not in ["авто", "auto", ""]:
-            try:
-                ws.row_dimensions[ri].height = float(row_height)
-            except ValueError:
-                pass # Если ввели текст по ошибке, оставляем авто-высоту
-        # -------------------------------
-        for ci in range(1, len(df.columns) + 1):
-            cell = ws.cell(row=ri, column=ci)
-            cell.alignment = ca
-            cell.border = brd
 
-    # Авто-ширина колонок: ~85% от длины самого длинного значения,
-    # но в пределах [12, 50] символов
-    for ci, col in enumerate(df.columns, 1):
-        col_data = df.iloc[:, ci - 1].astype(str)
-        mx = max(len(str(col)), col_data.str.len().max() if len(df) else 0)
-        ws.column_dimensions[get_column_letter(ci)].width = min(max(mx * 0.85, 12), 50)
+    # --- Высота строк данных (общая для обоих режимов оформления) ---
+    rh_auto = str(row_height).strip().lower() in ("авто", "auto", "")
+    if not rh_auto:
+        try:
+            h = float(row_height)
+            for ri in range(2, len(df) + 2):
+                ws.row_dimensions[ri].height = h
+        except ValueError:
+            pass  # некорректный ввод — оставляем авто-высоту
+
+    # --- Авто-ширина колонок с учётом выбранного режима ---
+    for ci, w in enumerate(
+            compute_column_widths(df, width_mode, width_row,
+                                  width_from, width_to), 1):
+        ws.column_dimensions[get_column_letter(ci)].width = w
 
     ws.freeze_panes = "A2"   # закрепляем строку заголовка
 
+    # Выравнивание заголовка: перенос текста включается флагом header_wrap.
+    # Применяется всегда — и со стилем таблицы, и без него.
+    ha = Alignment(horizontal="center", vertical="center",
+                   wrap_text=bool(header_wrap))
+
     # Стиль таблицы Excel
     if table_style:
+        # Выравнивание заголовков (перенос) + границы ячеек данных
+        for ci in range(1, len(df.columns) + 1):
+            ws.cell(row=1, column=ci).alignment = ha
+        for ri in range(2, len(df) + 2):
+            for ci in range(1, len(df.columns) + 1):
+                cell = ws.cell(row=ri, column=ci)
+                cell.alignment = ca
+                cell.border = brd
         # Оборачиваем диапазон в Table — Excel сам отрисует заголовок и полосы,
         # автофильтр включается автоматически
         last_col = get_column_letter(len(df.columns))
@@ -1494,7 +1650,6 @@ def convert(csv_paths: list, xlsx_path: str,
         brd_black  = Border(left=thin_black, right=thin_black, top=thin_black, bottom=thin_black)
         
         hf = Font(name="Calibri", bold=True, color="000000", size=10)
-        ha = Alignment(horizontal="center", vertical="center", wrap_text=True)
         # Оформляем заголовок (строка 1)
         for ci in range(1, len(df.columns) + 1):
             cell = ws.cell(row=1, column=ci)
@@ -1503,18 +1658,12 @@ def convert(csv_paths: list, xlsx_path: str,
             cell.border = brd_black
         # Оформляем данные (чёрные рамки со 2 строки)
         for ri in range(2, len(df) + 2):
-            # --- Установка высоты строки ---
-            if str(row_height).strip().lower() not in ["авто", "auto", ""]:
-                try:
-                    ws.row_dimensions[ri].height = float(row_height)
-                except ValueError:
-                    pass # Если ввели текст по ошибке, оставляем авто-высоту
-            # -------------------------------
             for ci in range(1, len(df.columns) + 1):
                 ws.cell(row=ri, column=ci).border = brd_black
         ws.auto_filter.ref = ws.dimensions   # автофильтр в "ручном" режиме
 
-    ws.row_dimensions[1].height = 36   # высота заголовка под перенос длинных имён
+    # Высота строки заголовка: больше, когда включён перенос длинных имён
+    ws.row_dimensions[1].height = 36 if header_wrap else 20
     wb.save(xlsx_path)
     return len(df), len(df.columns)
 
@@ -1612,7 +1761,14 @@ class App(TkinterDnD.Tk if _DND else tk.Tk):
         
         # ─── Высота строк ───
         self._row_height_val = self._settings.get("row_height", "Авто")
-        
+
+        # ─── Ширина столбцов + перенос заголовков ───
+        self._width_mode_key  = self._settings.get("width_mode", "all")
+        if self._width_mode_key not in WIDTH_MODE_STRINGS:
+            self._width_mode_key = "all"
+        self._width_param_val = self._settings.get("width_param", "2")
+        self._header_wrap_val = bool(self._settings.get("header_wrap", True))
+
         # ─── Состояние UI (не сохраняется) ───
         self._delim_val = self._settings.get("csv_delimiter", ";") # <-- Новое
         self._mode = "to_xlsx"
@@ -1794,6 +1950,21 @@ class App(TkinterDnD.Tk if _DND else tk.Tk):
             self.dlm_frame.configure(bg=t["ENTRY"])
             self.dlm_entry.configure(bg=t["ENTRY"], fg=t["TEXT"], insertbackground=t["TEXT"])
             self.dlm_arrow.configure(bg=t["ENTRY"], fg=t["MUTED"])
+        # Ширина столбцов + перенос заголовков
+        if hasattr(self, 'width_row'):
+            self.width_row.configure(bg=t["CARD"])
+            self.wm_frame.configure(bg=t["ENTRY"])
+            self.wm_entry.configure(bg=t["ENTRY"], fg=t["TEXT"], insertbackground=t["TEXT"])
+            self.wm_arrow.configure(bg=t["ENTRY"], fg=t["MUTED"])
+            self.wp_frame.configure(bg=t["ENTRY"])
+            self.wp_entry.configure(bg=t["ENTRY"], fg=t["TEXT"], insertbackground=t["TEXT"])
+            self.wp_hint.configure(bg=t["CARD"], fg=t["MUTED"])
+            self.hw_cb.configure(bg=t["CARD"], fg=t["TEXT"],
+                                 selectcolor=t["ENTRY"], activebackground=t["CARD"])
+        # Кнопка «Преобразовать» — всегда акцентная (защита от перекраски темой)
+        if hasattr(self, 'btn'):
+            self.btn.configure(bg=t["ACC2"], fg="white")
+            self._hover(self.btn, t["ACC2"], "#1A4A8A")
         self._refresh_hint()
 
     def _toggle_theme(self):
@@ -2238,6 +2409,41 @@ class App(TkinterDnD.Tk if _DND else tk.Tk):
             popup.focus_set()
             popup.grab_set()
 
+        def create_keyed_popup(frame_widget, label_var, items, setting_key,
+                               on_select=None):
+            """Попап выбора режима: сохраняет внутренний ключ, показывает метку."""
+            if hasattr(self, '_active_popup') and self._active_popup.winfo_exists():
+                self._active_popup.destroy()
+            popup = tk.Toplevel(self)
+            popup.overrideredirect(True)
+            popup.configure(bg=self._t()["CARD"], highlightthickness=1,
+                             highlightbackground=self._t()["BORDER"])
+            self._active_popup = popup
+            x = frame_widget.winfo_rootx()
+            y = frame_widget.winfo_rooty() + frame_widget.winfo_height()
+            w = frame_widget.winfo_width()
+            popup.geometry(f"+{x}+{y}")
+            popup.minsize(w, 1)
+            for key, label in items:
+                lbl = tk.Label(popup, text=label, font=(FONT, 9),
+                               bg=self._t()["CARD"], fg=self._t()["TEXT"],
+                               anchor="w", padx=10, pady=4, cursor="hand2")
+                lbl.pack(fill="x")
+                lbl.bind("<Enter>", lambda e, l=lbl: l.config(bg=self._t()["ACC2"], fg="white"))
+                lbl.bind("<Leave>", lambda e, l=lbl: l.config(bg=self._t()["CARD"], fg=self._t()["TEXT"]))
+                def on_click(e, k=key, lb=label):
+                    label_var.set(lb)
+                    self._settings[setting_key] = k
+                    if on_select:
+                        on_select(k)
+                    save_settings(self._settings)
+                    popup.destroy()
+                lbl.bind("<Button-1>", on_click)
+            popup.bind("<Button-1>", lambda e: popup.destroy() if not (popup.winfo_rootx() <= e.x_root <= popup.winfo_rootx() + popup.winfo_width() and popup.winfo_rooty() <= e.y_root <= popup.winfo_rooty() + popup.winfo_height()) else None)
+            popup.bind("<FocusOut>", lambda e: popup.destroy() if e.widget == popup else None)
+            popup.focus_set()
+            popup.grab_set()
+
         self.rh_arrow.bind("<Button-1>", lambda e: create_popup(self.rh_frame, self.rh_var, ["Авто", "15", "20", "30", "45", "60"], "row_height"))
         self.dlm_arrow.bind("<Button-1>", lambda e: create_popup(self.dlm_frame, self.dlm_var, [";", ",", "|", "Tab"], "csv_delimiter"))
 
@@ -2248,18 +2454,95 @@ class App(TkinterDnD.Tk if _DND else tk.Tk):
         self.rh_entry.bind("<KeyRelease>", save_typing)
         self.dlm_entry.bind("<KeyRelease>", save_typing)
 
-        # Divider (сдвигаем на 11 строку)
-        tk.Frame(self.card, bg=t["BORDER"], height=1).grid(
-            row=11, column=0, columnspan=2, sticky="ew", pady=(0, 14))
+        # ─── Настройки: Ширина столбцов + Перенос заголовков ───
+        self._lbl(self.s("width_only_lbl"), 11)
 
-        # Convert button (сдвигаем на 12 строку)
+        self.width_row = tk.Frame(self.card, bg=t["CARD"])
+        self.width_row.grid(row=12, column=0, columnspan=2, sticky="w", pady=(0, 12))
+
+        # 1. Режим автоподбора ширины (dropdown)
+        _wm_items = [(k, self.s(sk)) for k, sk in WIDTH_MODE_ITEMS]
+        self.width_mode_var = tk.StringVar(
+            value=self.s(WIDTH_MODE_STRINGS.get(self._width_mode_key, "width_mode_all")))
+        self.wm_frame = tk.Frame(self.width_row, bg=t["ENTRY"], relief="solid", bd=1)
+        self.wm_frame.pack(side="left", padx=(0, 10))
+        self.wm_entry = tk.Entry(self.wm_frame, textvariable=self.width_mode_var,
+                                 font=(FONT, 9), relief="flat", bd=0,
+                                 bg=t["ENTRY"], fg=t["TEXT"], width=16)
+        self.wm_entry.pack(side="left", padx=(6, 0), pady=4)
+        self.wm_arrow = tk.Label(self.wm_frame, text="▼", font=(FONT, 7),
+                                 fg=t["MUTED"], bg=t["ENTRY"], cursor="hand2")
+        self.wm_arrow.pack(side="right", padx=6)
+
+        # 2. Параметр (номер строки для "row" / диапазон N-M для "range")
+        #    Для режима "all" поле скрыто — ширину не нужно настраивать.
+        self.width_param_var = tk.StringVar(value=self._width_param_val)
+        self.wp_frame = tk.Frame(self.width_row, bg=t["ENTRY"], relief="solid", bd=1)
+        self.wp_frame.pack(side="left", padx=(0, 6))
+        self.wp_entry = tk.Entry(self.wp_frame, textvariable=self.width_param_var,
+                                 font=(FONT, 9), relief="flat", bd=0,
+                                 bg=t["ENTRY"], fg=t["TEXT"], width=8)
+        self.wp_entry.pack(side="left", padx=(6, 0), pady=4)
+        # Подсказка формата — меняется в зависимости от выбранного режима
+        self.wp_hint = tk.Label(self.width_row, text="", font=(FONT, 8),
+                                fg=t["MUTED"], bg=t["CARD"])
+        self.wp_hint.pack(side="left", padx=(0, 10))
+
+        # 3. Чекбокс «Перенос в заголовках»
+        self.header_wrap_var = tk.BooleanVar(value=self._header_wrap_val)
+        self.hw_cb = tk.Checkbutton(
+            self.width_row, text=self.s("header_wrap_lbl"),
+            variable=self.header_wrap_var, font=(FONT, 9),
+            fg=t["TEXT"], bg=t["CARD"], selectcolor=t["ENTRY"],
+            activebackground=t["CARD"], activeforeground=t["TEXT"],
+            cursor="hand2")
+        self.hw_cb.pack(side="left")
+
+        # Обновление видимости поля параметра и текста подсказки
+        def update_param_ui(*_):
+            mode = self._width_mode_key
+            if mode == "row":
+                self.wp_frame.pack(side="left", padx=(0, 6), before=self.hw_cb)
+                self.wp_hint.configure(text=self.s("width_hint_row"))
+                self.wp_hint.pack(side="left", padx=(0, 10), before=self.hw_cb)
+            elif mode == "range":
+                self.wp_frame.pack(side="left", padx=(0, 6), before=self.hw_cb)
+                self.wp_hint.configure(text=self.s("width_hint_range"))
+                self.wp_hint.pack(side="left", padx=(0, 10), before=self.hw_cb)
+            else:  # "all" — поле параметра не нужно
+                self.wp_frame.pack_forget()
+                self.wp_hint.pack_forget()
+
+        # Привязки
+        self.wm_arrow.bind("<Button-1>", lambda e: create_keyed_popup(
+            self.wm_frame, self.width_mode_var, _wm_items, "width_mode",
+            on_select=lambda k: (setattr(self, "_width_mode_key", k),
+                                 update_param_ui())))
+
+        def save_width(*_):
+            self._settings["width_param"] = self.width_param_var.get()
+            save_settings(self._settings)
+
+        def toggle_wrap():
+            self._settings["header_wrap"] = bool(self.header_wrap_var.get())
+            save_settings(self._settings)
+
+        self.wp_entry.bind("<KeyRelease>", save_width)
+        self.hw_cb.config(command=toggle_wrap)
+        update_param_ui()   # начальное состояние поля/подсказки
+
+        # Divider
+        tk.Frame(self.card, bg=t["BORDER"], height=1).grid(
+            row=13, column=0, columnspan=2, sticky="ew", pady=(0, 14))
+
+        # Convert button
         self.btn = tk.Button(
             self.card, text="  ▶  Преобразовать",
             font=(FONT, 11, "bold"), fg="white", bg=t["ACC2"],
             activebackground="#1A4A8A", activeforeground="white",
             relief="flat", bd=0, padx=36, pady=11,
             cursor="hand2", command=self._run)
-        self.btn.grid(row=12, column=0, columnspan=2, pady=(0, 4))
+        self.btn.grid(row=14, column=0, columnspan=2, pady=(0, 4))
         self._hover(self.btn, t["ACC2"], "#1A4A8A")
 
         # Status
@@ -2936,6 +3219,24 @@ class App(TkinterDnD.Tk if _DND else tk.Tk):
         row_h      = self.rh_var.get().strip()
         dlm        = self.dlm_var.get().strip()
 
+        # Параметры автоподбора ширины и переноса заголовков
+        header_wrap = bool(self.header_wrap_var.get())
+        w_mode = self._width_mode_key
+        w_row, w_from, w_to = 0, 0, 0
+        _param = self.width_param_var.get().strip()
+        if w_mode == "row":
+            try:
+                w_row = int(re.split(r"[-–]", _param)[0])
+            except ValueError:
+                w_row = 0
+        elif w_mode == "range":
+            _nums = re.split(r"[-–]", _param)
+            try:
+                w_from = int(_nums[0])
+                w_to = int(_nums[1]) if len(_nums) > 1 else w_from
+            except (ValueError, IndexError):
+                w_from = w_to = 0
+
         is_to_csv = getattr(self, '_mode', 'to_xlsx') == 'to_csv'
 
         # Вложенная функция, которая запускается ТОЛЬКО после подтверждения разделителя
@@ -2960,7 +3261,9 @@ class App(TkinterDnD.Tk if _DND else tk.Tk):
                     else:
                         rows, cols = convert(
                             self._csv_paths, xlsx_path, col_path, style_name,
-                            row_height=row_h, delimiter=final_dlm)
+                            row_height=row_h, delimiter=final_dlm,
+                            header_wrap=header_wrap, width_mode=w_mode,
+                            width_row=w_row, width_from=w_from, width_to=w_to)
 
                     log.info("Готово: %d строк, %d колонок → %s",
                              rows, cols, Path(xlsx_path).name)
