@@ -96,7 +96,7 @@ def read_csv_smart(path: str, sep: str = ";", **kwargs) -> pd.DataFrame:
 FONT          = "Segoe UI"
 MIN_W         = 600                              # минимальная ширина окна
 APP_NAME      = "Jira CSV ↔ XLSX"
-VERSION       = "0.2 beta"
+VERSION       = "0.3 beta"
 SETTINGS_FILE = "settings.json"                  # хранится рядом с .exe
 
 # ─── Режимы автоподбора ширины столбцов ───────────────────────────────────────
